@@ -73,24 +73,11 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
     tau=1.8
     #update h
     h=0.2
-    return(list(pos=x,tau=tau,h=h,w=w,m=m,iter=i+1))
+    return(list(pos=x,tau=tau,h=h,w=w,m=m,iter=i+1,Delta=Delta))
 }
 
-
-
-
-d=50
-sigma=((d:1)/d)^(1/2)
-#init=rnorm(d)*sigma
-init=rep(0,d);init[2]=10
-U=function(x){sum(0.5*x^2/sigma^2)}
-grad=function(x){x/sigma^2}
-n=10^4
-
-
-
-adaptive_malt=function(n,init){
-  update=list(pos=init,tau=1.8,h=0.2,w=init,m=init,iter=1)
+adaptive_malt=function(n,init,h0=0.2){
+  update=list(pos=init,tau=1.8,h=h0,w=init,m=init,iter=1)
   eig_values=rep(NA,n)
   means=rep(NA,n)
   for(i in 1:n){
@@ -101,7 +88,3 @@ adaptive_malt=function(n,init){
   return(list(eig_values=eig_values,means=means))
 }
 
-output=adaptive_malt(n,init)
-
-plot(output$eig_values,type="l")
-plot(output$means,type="l")
