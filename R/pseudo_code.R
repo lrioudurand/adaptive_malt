@@ -26,12 +26,12 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
   zeta=sqrt(1-eta^2)
   half=h/2
   small=h^2/8
-  L=ceiling(tau/h)
-  steps=L+1
   i=iter
   if(i<100){
-    L=1
+    tau=h
   }
+  L=ceiling(tau/h)
+  steps=L+1
   #malt_x=pos
   x=pos
   grad_x=grad(x);grad_malt_x=grad_x
@@ -56,20 +56,52 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
     U_x=U(x)
     Delta=small*(gradsq_x-gradsq_malt_x)+U_x-U_malt_x+Delta
     if(expo_draw<Delta){x=pos;grad_x=grad_malt_x;gradsq_x=gradsq_malt_x;U_x=U_malt_x}else{grad_malt_x=grad_x;gradsq_malt_x=gradsq_x;U_malt_x=U_x}
-
     #update m
     eta_m=1/(ceiling(i/kappa)+1)
     m=(1-eta_m)*m+eta_m*x
     #update w
-    w=w*(i-eta_w)/(i+1)+x*(sum(x*eigen_vector))*(eta_w+1)/(i+1)
+    x_c=x-m
+    if(i>eta_w){
+    w=w*(i-eta_w)/(i+1)+x_c*(sum(x_c*eigen_vector))*(eta_w+1)/(i+1)
+    }else{w=x_c}
     #update tau
     pos_c=sum((pos-m)*eigen_vector)
     prop_c=sum((prop-m)*eigen_vector)
     v_c=sum(v*eigen_vector)
     diff_sq=((prop_c)^2-(pos_c)^2)
-    noisy_grad=4*diff_sq*prop_c*v_c-(1/tau)(diff_sq)^2
+    noisy_grad=4*diff_sq*prop_c*v_c-(1/tau)*(diff_sq)^2
+    tau=1.8
     #update h
-
+    h=0.2
     return(list(pos=x,tau=tau,h=h,w=w,m=m,iter=i+1))
 }
 
+
+
+
+d=50
+sigma=((d:1)/d)^(1/2)
+#init=rnorm(d)*sigma
+init=rep(0,d);init[2]=10
+U=function(x){sum(0.5*x^2/sigma^2)}
+grad=function(x){x/sigma^2}
+n=10^4
+
+
+
+adaptive_malt=function(n,init){
+  update=list(pos=init,tau=1.8,h=0.2,w=init,m=init,iter=1)
+  eig_values=rep(NA,n)
+  means=rep(NA,n)
+  for(i in 1:n){
+    update=osam(U,grad,update$pos,update$tau,update$h,update$w,update$m,update$iter)
+    eig_values[i]=sqrt(sum(update$w^2))
+    means[i]=sum(update$w*update$m)/sqrt(sum(update$w^2))
+  }
+  return(list(eig_values=eig_values,means=means))
+}
+
+output=adaptive_malt(n,init)
+
+plot(output$eig_values,type="l")
+plot(output$means,type="l")
