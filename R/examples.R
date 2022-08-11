@@ -25,7 +25,7 @@ output=adaptive_malt(n = n,init = init, n_warmup = n_warmup, delta = delta)
 plot(output$eig_values,type="l")
 plot(output$means,type="l")
 plot(output$h, type = "l")
-mean(output$alpha)  # if adaptation is good this should go to delta.
+mean(output$alpha[n_warmup:n])  # if adaptation is good this should go to delta.
 
 # Test initial step size.
 h0 = init_stepsize(U, grad, pos0 = init, tau0 = 1.8, w0 = init, h0 = 1)
@@ -36,4 +36,13 @@ output=adaptive_malt(n = n, init = init, h0 = h0, n_warmup = n_warmup,
 plot(output$eig_values,type="l")
 plot(output$means,type="l")
 plot(output$h, type = "l")
-mean(output$alpha)
+mean(output$alpha[n_warmup:n])
+
+
+# Check for divergent transitions (follow example in Inference Gym,
+# https://github.com/tensorflow/probability/blob/main/spinoffs/inference_gym/notebooks/inference_gym_tutorial.ipynb)
+divergence = output$Delta > 1000
+sum(divergence)  # 3
+
+# Check for divergences after warmup
+sum(output$Delta[n_warmup:n] > 1000)  # 0

@@ -30,6 +30,7 @@ kappa_stepsize = 0.75
 
 # test
 # {
+# pos = init
 # tau = 1.8
 # h = 0.2
 # w = init
@@ -124,13 +125,14 @@ adaptive_malt=function(n,init,h0=0.2,n_warmup = 2000, delta = 0.8){
   update=list(pos=init,tau=1.8,h=h0,w=init,m=init,iter=1,
               H_bar = H_bar0, h_bar = h_bar0)
   mu = log(10 * h0)
-  
+
   # store results for analysis
   eig_values=rep(NA,n)
   means=rep(NA,n)
   h = rep(NA, n)  # stepsize
   alpha = rep(NA, n)  # acceptance prob
-  
+  Delta = rep(NA, n)  # change in energy
+
   for(i in 1:n){
     update=osam(U,grad,update$pos,update$tau,update$h,update$w,update$m,update$iter,
                 update$H_bar, update$h_bar, mu, n_warmup, delta)
@@ -138,8 +140,10 @@ adaptive_malt=function(n,init,h0=0.2,n_warmup = 2000, delta = 0.8){
     means[i]=sum(update$w*update$m)/sqrt(sum(update$w^2))
     h[i] = update$h
     alpha[i] = min(1, exp(-update$Delta))
+    Delta[i] = update$Delta
   }
 
-  return(list(eig_values=eig_values,means=means, h = h, alpha = alpha))
+  return(list(eig_values=eig_values,means=means, h = h, alpha = alpha,
+              Delta = Delta))
 }
 
