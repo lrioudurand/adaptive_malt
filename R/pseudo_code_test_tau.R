@@ -17,7 +17,7 @@ eta_tau=0.05
 eta_h=0.05
 eta_w=3
 kappa=8
-eta_noise=0.007
+eta_noise=0.005
 
 osam=function(U,grad,pos,tau,h,w,m,iter){
   eigen_max=sqrt(sum(w^2))
@@ -30,10 +30,11 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
   i=iter
   if(i<100){
     #tau=h
-    tau=2
+    tau=h
   }
+  if(i==100){tau=1.2*sqrt(eigen_max)}
   if(tau<h){tau=h}
-  if(tau>10){tau=10}
+  if(tau>100){tau=100}
   L=ceiling(tau/h)
   steps=L+1
   #malt_x=pos
@@ -46,6 +47,7 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
  # malt update
     v=norm_draws[,steps]
     Delta=0
+    v_0=v
     for(j in 1:L){
       v=eta*v+zeta*norm_draws[,j]
       v=v-half*grad_x
@@ -72,15 +74,21 @@ osam=function(U,grad,pos,tau,h,w,m,iter){
     pos_c=sum((pos-m)*eigen_vector)
     prop_c=sum((prop-m)*eigen_vector)
     v_c=sum(v*eigen_vector)
+    v_0=sum(v_0*eigen_vector)
     diff_sq=((prop_c)^2-(pos_c)^2)
     #noisy_grad=4*diff_sq*prop_c*v_c-(1/tau)*(diff_sq)^2
-    noisy_grad=4*diff_sq*prop_c*v_c*(1/tau)-(1/tau^2)*(diff_sq)^2
+    #noisy_grad=4*diff_sq*(pos_c*v_0)-(1/tau)*(diff_sq)^2
+    noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(1/tau)*(diff_sq)^2
+    #noisy_grad=-4*(pos_c)^2*prop_c*v_c-(1/tau)*(diff_sq)^2
+    #noisy_grad=-4*((pos_c)^2-eigen_max)*prop_c*v_c-(1/tau)*(diff_sq)^2
+    #noisy_grad=4*diff_sq*prop_c*v_c*(1/tau)-(1/tau^2)*(diff_sq)^2
     #log_tau=log(tau)+eta_noise*(noisy_grad)
-    #log_tau=log(tau)+eta_noise*(noisy_grad)/sqrt(sum(noisy_grad^2))
-    #tau=exp(log_tau)
-    tau=tau+eta_noise*(noisy_grad)/sqrt(sum(noisy_grad^2))
+    log_tau=log(tau)+eta_noise*exp(-2*i/n)*(noisy_grad)
+    #log_tau=log(tau)+eta_noise*(noisy_grad)
+    tau=exp(log_tau)
+    #tau=tau+eta_noise*(noisy_grad)
     #update h
-    h=0.1
+    h=0.05
 
 
     #storing noisy_grad
@@ -131,3 +139,6 @@ plot(output$tau[1:1000],type="l")
 plot(output$tau,type="l")
 
 output$last_eigen_vector
+mean(output$tau[2000:n])
+var(output$tau[2000:n])
+var(output$noisyg[2000:n])
