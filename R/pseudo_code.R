@@ -39,7 +39,7 @@ eps_adam=10^(-8)
 
 
 # hyperparameters for dual averaging of step size
-gamma = 0.05
+gamma = 0.5
 t0 = 10
 kappa_stepsize = 0.75
 
