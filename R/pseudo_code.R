@@ -17,7 +17,7 @@
 #' @param delta Target mean acceptance rate for proposal. Real number between 0 and 1.
 
 #target
-d=100
+d=200
 sigma=((d:1)/d)^(1/2)
 init=rnorm(d)*sigma
 init=rep(0,d);init[2]=10
@@ -75,7 +75,7 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,m_adam,v_adam,iter,
   if(i<100){
     tau=h
   }
-  if(i==100){tau=2*eigen_max}
+  if(i==100){tau=1.6*eigen_max}
   if(tau<h){tau=h}
   L=floor(tau/h)
   steps=L+1
@@ -160,7 +160,7 @@ H_bar0 = 0
 
 
 
-adaptive_malt=function(n,init,h0=0.2,n_warmup = n_warmup, delta = 0.7){
+adaptive_malt=function(n,init,h0=0.01,n_warmup = n_warmup, delta = 0.7){
   update=list(pos=init,tau=h0,h=h0,w=init,m=init,m_sq=sum(init^2),v_sq=0,cov_sq=0,m_adam=0,v_adam=0,iter=1,
               H_bar = H_bar0, h_bar = h_bar0)
   mu = log(10 * h0)
