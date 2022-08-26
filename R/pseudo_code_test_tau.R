@@ -19,8 +19,8 @@ eta_w=3
 kappa=8
 eta_noise=0.001
 
-alpha_adam=0.005
-beta1_adam=0
+alpha_adam=0.01
+beta1_adam=0.9
 beta2_adam=0.999
 eps_adam=10^(-8)
 
@@ -29,7 +29,9 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
   eigen_max=sqrt(sum(w^2))
   eigen_vector=w/eigen_max
   if(any(is.na(eigen_vector))){eigen_vector=w*0}
-  g=2/sqrt(eigen_max) #look at the meads paper to improve
+  g=1/sqrt(eigen_max) #look at the meads paper to improve
+  #g=tau/eigen_max
+  #g=1/tau
   eta=exp(-g*h)
   zeta=sqrt(1-eta^2)
   half=h/2
@@ -39,10 +41,10 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
     #tau=h
     tau=h
   }
-  if(i==100){tau=1.8*sqrt(eigen_max)}
+  if(i==100){tau=2*sqrt(eigen_max)}
   #if(is.na(tau)){tau=h}
   if(tau<h){tau=h}
-  if(tau>10){tau=10}
+  if(tau>100){tau=100}
   L=floor(tau/h)
   steps=L+1
   #malt_x=pos
@@ -83,18 +85,25 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
     prop_c=sum((prop-m)*eigen_vector)
     v_c=sum(v*eigen_vector)
     v_0=sum(v_0*eigen_vector)
+    diff_mean=prop_c-pos_c
     diff_sq=((prop_c)^2-(pos_c)^2)
     sum_sq=((prop_c)^2+(pos_c)^2)
     #update m_sq, v_sq and rho
     m_sq=(1-eta_m)*m_sq+eta_m*(pos_c^2+prop_c^2)/2
     if(i>eta_w & eigen_max>0){
-    v_sq=v_sq*(i-eta_w)/(i+1)+0.5*((pos_c^2-m_sq)^2+(pos_c^2-m_sq)^2)*(eta_w+1)/(i+1)
+      #square
+    v_sq=v_sq*(i-eta_w)/(i+1)+0.5*((pos_c^2-m_sq)^2+(prop_c^2-m_sq)^2)*(eta_w+1)/(i+1)
     cov_sq= cov_sq*(i-eta_w)/(i+1)+(pos_c^2-m_sq)*(prop_c^2-m_sq)*(eta_w+1)/(i+1)
-    deriv_sq=deriv_sq*(i-eta_w)/(i+1)+diff_sq*(prop_c*v_c+pos_c*v_0)*(eta_w+1)/(i+1)
+    #deriv_sq=deriv_sq*(i-eta_w)/(i+1)+diff_sq*(prop_c*v_c+pos_c*v_0)*(eta_w+1)/(i+1)
+    #mean
+    #v_sq=v_sq*(i-eta_w)/(i+1)+0.5*(pos_c^2+prop_c^2)*(eta_w+1)/(i+1)
+    #cov_sq= cov_sq*(i-eta_w)/(i+1)+(pos_c)*(prop_c)*(eta_w+1)/(i+1)
     rho=cov_sq/v_sq
-    rho_prime=deriv_sq/v_sq
+    #rho_prime=deriv_sq/v_sq
     #noisy_grad=rho_prime-((1-min(1,rho)^2))/(2*h*L)
     noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(0.5*(1+min(1,rho))/(h*L))*(diff_sq)^2
+    #noisy_grad=diff_mean*(v_c+v_0)-(0.5*(1+min(1,rho))/(h*L))*(diff_mean)^2
+    #noisy_grad=diff_mean*(v_c+v_0)-(1/(h*L))*(diff_mean)^2
     #if(i>20000){noisy_grad=2*v_sq*(rho_prime-((1-min(1,rho)^2))/(2*h*L))}
     #noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(v_sq*(1-min(1,rho)^2)/(h*L))
     }else{noisy_grad=0}
@@ -111,7 +120,10 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
      v_hat=v_adam/(1-beta2_adam^i)
      #tau=tau+alpha_adam*m_hat/(sqrt(v_hat)+eps_adam)
      #current_alpha=alpha_adam*5^(1-i/n)
-     current_alpha=alpha_adam
+     #current_alpha=alpha_adam*20^(-i/n)
+     current_alpha=alpha_adam*(1-0.95*i/n)
+     #current_alpha=alpha_adam*(1-0.95*sqrt(i/n))
+     #if(i<2000){current_alpha=alpha_adam*10}else{current_alpha=alpha_adam}
     log_tau=log(tau)+current_alpha*m_hat/(sqrt(v_hat)+eps_adam)
     #noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0+sign(prop_c*v_c*pos_c*v_0)*sqrt(abs(prop_c*v_c*pos_c*v_0)))-(1/tau)*(diff_sq)^2
     #noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(2/tau)*(m_sq-(pos_c*prop_c)^2)
@@ -124,6 +136,7 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
     #log_tau=log(tau)+eta_noise*exp(-2*i/n)*(noisy_grad)
     #log_tau=log(tau)+eta_noise*(noisy_grad)
     tau=exp(log_tau)
+    #tau=tau+current_alpha*m_hat/(sqrt(v_hat)+eps_adam)
     #tau=tau+eta_noise*(noisy_grad)
     #update h
     h=0.05
@@ -136,10 +149,10 @@ osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,deriv_sq,m_adam,v_adam,iter)
 
 
 
-d=50
+d=200
 sigma=((d:1)/d)^(1/2)
 init=rnorm(d)*sigma
-#init=rep(0,d);init[2]=10
+init=rep(0,d);init[2]=10
 U=function(x){sum(0.5*x^2/sigma^2)}
 grad=function(x){x/sigma^2}
 n=10000

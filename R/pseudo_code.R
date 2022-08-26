@@ -16,12 +16,26 @@
 #' @param n_warmup Iteration number after which adaptation should stop.
 #' @param delta Target mean acceptance rate for proposal. Real number between 0 and 1.
 
+#target
+d=100
+sigma=((d:1)/d)^(1/2)
+init=rnorm(d)*sigma
+init=rep(0,d);init[2]=10
+U=function(x){sum(0.5*x^2/sigma^2)}
+grad=function(x){x/sigma^2}
+
 
 # hyperparameters
 eta_tau=0.05
 eta_h=0.05
 eta_w=3
 kappa=8
+
+#hyperparameters for adaptive integration time
+alpha_adam=0.01
+beta1_adam=0.9
+beta2_adam=0.999
+eps_adam=10^(-8)
 
 
 # hyperparameters for dual averaging of step size
@@ -46,7 +60,7 @@ kappa_stepsize = 0.75
 # }
 
 
-osam=function(U,grad,pos,tau,h,w,m,m_adam,v_adam,iter,
+osam=function(U,grad,pos,tau,h,w,m,m_sq,v_sq,cov_sq,m_adam,v_adam,iter,
               H_bar, h_bar, mu, n_warmup, delta){
   eigen_max=sqrt(sum(w^2))
   eigen_vector=w/eigen_max
@@ -61,7 +75,7 @@ osam=function(U,grad,pos,tau,h,w,m,m_adam,v_adam,iter,
   if(i<100){
     tau=h
   }
-  if(i==100){tau=1.8*eigen_max}
+  if(i==100){tau=2*eigen_max}
   if(tau<h){tau=h}
   L=floor(tau/h)
   steps=L+1
@@ -111,12 +125,20 @@ osam=function(U,grad,pos,tau,h,w,m,m_adam,v_adam,iter,
     v_c=sum(v*eigen_vector)
     v_0=sum(v_0*eigen_vector)
     diff_sq=((prop_c)^2-(pos_c)^2)
-    noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(0.75/(h*L))*(diff_sq)^2
+    m_sq=(1-eta_m)*m_sq+eta_m*(pos_c^2+prop_c^2)/2
+    if(i>eta_w & eigen_max>0){
+      #square
+      v_sq=v_sq*(i-eta_w)/(i+1)+0.5*((pos_c^2-m_sq)^2+(prop_c^2-m_sq)^2)*(eta_w+1)/(i+1)
+      cov_sq= cov_sq*(i-eta_w)/(i+1)+(pos_c^2-m_sq)*(prop_c^2-m_sq)*(eta_w+1)/(i+1)
+      rho=cov_sq/v_sq
+      noisy_grad=2*diff_sq*(prop_c*v_c+pos_c*v_0)-(0.5*(1+min(1,rho))/(h*L))*(diff_sq)^2
+      }else{noisy_grad=0}
     m_adam=beta1_adam*m_adam+(1-beta1_adam)*noisy_grad
     v_adam=beta2_adam*v_adam+(1-beta2_adam)*noisy_grad^2
     m_hat=m_adam/(1-beta1_adam^i)
     v_hat=v_adam/(1-beta2_adam^i)
-    log_tau=log(tau)+alpha_adam*m_hat/(sqrt(v_hat)+eps_adam)
+    current_alpha=alpha_adam*(1-0.95*i/n_warmup)
+    log_tau=log(tau)+current_alpha*m_hat/(sqrt(v_hat)+eps_adam)
     tau=exp(log_tau)
     }else{noisy_grad=0}
     #update h
@@ -128,7 +150,7 @@ osam=function(U,grad,pos,tau,h,w,m,m_adam,v_adam,iter,
     if (i == n_warmup) h = h_bar
   }else{noisy_grad=0}
 
-  return(list(pos=x,tau=tau,h=h,w=w,m=m,m_adam=m_adam,v_adam=v_adam,iter=i+1,
+  return(list(pos=x,tau=tau,h=h,w=w,m=m,m_sq=m_sq,v_sq=v_sq,cov_sq=cov_sq,m_adam=m_adam,v_adam=v_adam,iter=i+1,
               noisy_grad=noisy_grad,Delta=Delta,H_bar = H_bar, h_bar = h_bar))
 }
 
@@ -136,14 +158,10 @@ osam=function(U,grad,pos,tau,h,w,m,m_adam,v_adam,iter,
 h_bar0 = 1
 H_bar0 = 0
 
-#hyperparameters for adaptive integration time
-alpha_adam=0.0005
-beta1_adam=0.9
-beta2_adam=0.999
-eps_adam=10^(-8)
 
-adaptive_malt=function(n,init,h0=0.2,n_warmup = n_warmup, delta = 0.95){
-  update=list(pos=init,tau=h0,h=h0,w=init,m=init,m_adam=0,v_adam=0,iter=1,
+
+adaptive_malt=function(n,init,h0=0.2,n_warmup = n_warmup, delta = 0.7){
+  update=list(pos=init,tau=h0,h=h0,w=init,m=init,m_sq=sum(init^2),v_sq=0,cov_sq=0,m_adam=0,v_adam=0,iter=1,
               H_bar = H_bar0, h_bar = h_bar0)
   mu = log(10 * h0)
 
@@ -158,6 +176,7 @@ adaptive_malt=function(n,init,h0=0.2,n_warmup = n_warmup, delta = 0.95){
   noisyg=rep(NA,n)
   for(i in 1:n){
     update=osam(U,grad,pos=update$pos,tau=update$tau,h=update$h,w=update$w,m=update$m,
+                m_sq=update$m_sq,v_sq=update$v_sq,cov_sq=update$cov_sq,
                 m_adam=update$m_adam,v_adam=update$v_adam,iter=update$iter,
                 H_bar=update$H_bar, h_bar=update$h_bar, mu=mu, n_warmup=n_warmup, delta=delta)
     eig_values[i]=sqrt(sum(update$w^2))
@@ -175,11 +194,18 @@ adaptive_malt=function(n,init,h0=0.2,n_warmup = n_warmup, delta = 0.95){
               last_eigen_vector=update$w))
 }
 
-n=10000
-n_warmup=2000
+n=20000
+n_warmup=10000
 output=adaptive_malt(n,init,n_warmup=n_warmup)
 plot(cumsum(output$alpha)/(1:n),type="l",ylim=c(0.75,0.85))
 plot(output$h,type="l",ylim=c(0,0.4))
+
+
+
+
+
+
+
 plot(output$tau,type="l")
 plot(output$means,type="l")
 plot(output$noisyg,type="l")
@@ -200,7 +226,7 @@ tau_average[n]
 
 #install.packages("coda")
 #library(coda)
-effectiveSize(output$chain[n_warmup:n]^2)/tau_average[n]
+#effectiveSize(output$chain[n_warmup:n]^2)/((n-n_warmup)*tau_average[n])
 
 #plot(output$tau[1:250],type="l")
 #plot(output$tau[1:10],type="l")
